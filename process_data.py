@@ -265,3 +265,184 @@ if 'AAPL' in dataframes:
     print("\n")
     print(dataframes['AAPL'][['Adj Close', 'RSI']].head(20))
 # highlight-end
+
+
+
+# highlight-start
+# --- 8. Feature Engineering: Calculate Moving Average Convergence Divergence (MACD) ---
+
+print("\n--- Engineering Features: Moving Average Convergence Divergence (MACD) ---")
+
+# Define the standard short, long, and signal window sizes for MACD.
+MACD_SHORT_WINDOW = 12
+MACD_LONG_WINDOW = 26
+MACD_SIGNAL_WINDOW = 9
+
+for ticker, df in dataframes.items():
+    print(f"  - Calculating MACD for {ticker}...")
+    
+    # Step 1: Calculate the Short-term EMA (12-period)
+    ema_short = df['Adj Close'].ewm(span=MACD_SHORT_WINDOW, adjust=False).mean()
+    
+    # Step 2: Calculate the Long-term EMA (26-period)
+    ema_long = df['Adj Close'].ewm(span=MACD_LONG_WINDOW, adjust=False).mean()
+    
+    # Step 3: Calculate the MACD Line (the difference between short and long EMAs)
+    # This is the core of the indicator.
+    df['MACD'] = ema_short - ema_long
+    
+    # Step 4: Calculate the Signal Line (a 9-period EMA of the MACD line)
+    # This acts as a trigger line for trading signals.
+    df['MACD_Signal'] = df['MACD'].ewm(span=MACD_SIGNAL_WINDOW, adjust=False).mean()
+    
+    # Step 5: Calculate the MACD Histogram (the difference between the MACD and Signal lines)
+    # This visualizes the convergence and divergence, indicating the strength of momentum.
+    df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
+
+print("\nMACD feature engineering complete.")
+
+# --- 9. Final Inspection After All Feature Engineering ---
+
+# Let's inspect one of the DataFrames to see all our new features together.
+if 'AAPL' in dataframes:
+    print("\n--- Inspecting AAPL DataFrame After Adding MACD ---")
+    
+    # We select a few key columns for a clean view, including our new MACD features.
+    print(dataframes['AAPL'][['Adj Close', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist']].tail(10))
+# highlight-end
+
+
+
+
+# highlight-start
+# --- 9. Normalize Feature Columns ---
+
+# First, we need to import the scaler from scikit-learn
+from sklearn.preprocessing import MinMaxScaler
+
+print("\n--- Normalizing Feature Columns ---")
+
+# We must first handle the NaN values that were created by our rolling indicators (SMA, EMA, RSI, etc.).
+# Scalers cannot handle missing data. The simplest and most robust approach is to drop any
+# rows that contain at least one NaN value. This effectively removes the initial "warm-up"
+# period for our indicators, leaving us with a clean, complete dataset for the model.
+for ticker, df in dataframes.items():
+    rows_before = len(df)
+    df.dropna(inplace=True)
+    rows_after = len(df)
+    print(f"  - {ticker}: Dropped {rows_before - rows_after} initial rows with NaN indicator values.")
+
+# # Define the list of columns that we want to normalize.
+# # This should include all the numerical features that our agent will observe.
+# COLUMNS_TO_NORMALIZE = [
+#     'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume',
+#     'SMA_20', 'SMA_50', 'EMA_20', 'EMA_50',
+#     'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist'
+# ]
+
+# # A VERY IMPORTANT NOTE ON DATA LEAKAGE:
+# # In a production-grade ML pipeline, you should fit the scaler ONLY on the training data.
+# # Then, you use that SAME fitted scaler to transform the validation and test data.
+# # This prevents information from the future (e.g., the max price in the test set)
+# # from "leaking" into the training process and giving you an unrealistically optimistic model.
+# # For simplicity in this step of the project, we are normalizing the entire dataset at once.
+# # We will perform the train/val/test split in the next step. Be aware of this
+# # simplification—it's a crucial concept in applied machine learning!
+
+# for ticker, df in dataframes.items():
+#     # Instantiate the MinMaxScaler. This will scale data to the default range of [0, 1].
+#     scaler = MinMaxScaler()
+    
+#     # We apply the scaler to the selected columns.
+#     # .fit_transform() is a convenient method that first 'learns' the min and max values
+#     # of each column (the 'fit' part) and then applies the transformation (the 'transform' part).
+#     # It returns a NumPy array, which we immediately assign back to the DataFrame's columns,
+#     # overwriting the original, unscaled values.
+#     df[COLUMNS_TO_NORMALIZE] = scaler.fit_transform(df[COLUMNS_TO_NORMALIZE])
+    
+#     print(f"  - {ticker}: Columns normalized successfully.")
+
+# print("\nFeature normalization complete.")
+
+# # --- 10. Final Inspection After Normalization ---
+
+# # Let's inspect the data one last time to confirm the normalization.
+# if 'AAPL' in dataframes:
+#     print("\n--- Inspecting AAPL DataFrame After Normalization ---")
+    
+#     # The .describe() method is perfect for this. It shows summary statistics.
+#     # We should now see that for our normalized columns, the 'min' is 0.0 and the 'max' is 1.0.
+#     # This confirms our transformation was successful.
+#     print(dataframes['AAPL'][COLUMNS_TO_NORMALIZE].describe())
+# # highlight-end
+
+
+# highlight-start
+# --- 10. Chronological Data Splitting (Train, Validation, Test) ---
+
+print("\n--- Splitting Data Chronologically ---")
+
+# Define the split percentages
+TRAIN_PCT = 0.70
+VALIDATION_PCT = 0.15
+# TEST_PCT is implicitly 1 - TRAIN_PCT - VALIDATION_PCT (0.15)
+
+# Create dictionaries to hold the split data for each ticker
+train_data = {}
+validation_data = {}
+test_data = {}
+
+for ticker, df in dataframes.items():
+    # Calculate the split indices
+    train_end_idx = int(len(df) * TRAIN_PCT)
+    validation_end_idx = int(len(df) * (TRAIN_PCT + VALIDATION_PCT))
+    
+    # Slice the DataFrame using iloc for integer-location based indexing
+    train_data[ticker] = df.iloc[:train_end_idx].copy()
+    validation_data[ticker] = df.iloc[train_end_idx:validation_end_idx].copy()
+    test_data[ticker] = df.iloc[validation_end_idx:].copy()
+    
+    print(f"  - {ticker}:")
+    print(f"    - Training set shape:   {train_data[ticker].shape}")
+    print(f"    - Validation set shape: {validation_data[ticker].shape}")
+    print(f"    - Test set shape:       {test_data[ticker].shape}")
+
+# --- 11. Normalize Data (The Correct Way - Preventing Data Leakage) ---
+
+from sklearn.preprocessing import MinMaxScaler
+
+print("\n--- Normalizing Data Sets ---")
+
+COLUMNS_TO_NORMALIZE = [
+    'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume',
+    'SMA_20', 'SMA_50', 'EMA_20', 'EMA_50',
+    'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist'
+]
+
+# Loop through each ticker to apply normalization
+for ticker in TICKERS:
+    # Instantiate the scaler
+    scaler = MinMaxScaler()
+    
+    # Fit the scaler ONLY on the training data for the current ticker
+    # This learns the min/max values from the training period ONLY.
+    scaler.fit(train_data[ticker][COLUMNS_TO_NORMALIZE])
+    
+    # Transform the training, validation, and test sets using the FITTED scaler
+    # This applies the learned scaling rules to all three datasets.
+    train_data[ticker][COLUMNS_TO_NORMALIZE] = scaler.transform(train_data[ticker][COLUMNS_TO_NORMALIZE])
+    validation_data[ticker][COLUMNS_TO_NORMALIZE] = scaler.transform(validation_data[ticker][COLUMNS_TO_NORMALIZE])
+    test_data[ticker][COLUMNS_TO_NORMALIZE] = scaler.transform(test_data[ticker][COLUMNS_TO_NORMALIZE])
+    
+    print(f"  - {ticker}: Train, Validation, and Test sets normalized.")
+
+# --- 12. Final Inspection ---
+print("\n--- Final Inspection of Normalized Data ---")
+# Let's check the test set for AAPL to confirm it's scaled correctly
+# Note: The min/max won't be exactly 0 and 1, as it was scaled based on the TRAIN set's range.
+# This is correct and proves we have avoided data leakage.
+print(test_data['AAPL'][COLUMNS_TO_NORMALIZE].describe())
+# highlight-end
+
+
+
