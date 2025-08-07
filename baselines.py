@@ -82,3 +82,97 @@ def simulate_buy_and_hold(data, initial_capital, transaction_cost_pct):
     portfolio_history_series = pd.Series(portfolio_history, index=data.index)
     
     return final_portfolio_value, portfolio_history_series
+
+# SMA crossover statergy
+
+# baselines.py
+
+# (Your existing simulate_buy_and_hold function should be here)
+# ...
+
+# highlight-start
+def simulate_sma_crossover(data, initial_capital, transaction_cost_pct, short_window, long_window):
+    """
+    Simulates an SMA Crossover strategy.
+
+    Buys when the short-term SMA crosses above the long-term SMA (Golden Cross).
+    Sells when the short-term SMA crosses below the long-term SMA (Death Cross).
+
+    Args:
+        data (pd.DataFrame): The test dataset. Must contain 'Adj Close',
+                             and SMA columns named f'SMA_{short_window}' and f'SMA_{long_window}'.
+        initial_capital (float): The starting amount of cash.
+        transaction_cost_pct (float): The percentage cost for each transaction.
+        short_window (int): The lookback period for the short-term SMA.
+        long_window (int): The lookback period for the long-term SMA.
+
+    Returns:
+        tuple: A tuple containing:
+            - final_portfolio_value (float): The final liquidated value of the portfolio.
+            - portfolio_history (pd.Series): A Series with the portfolio's value at each time step.
+    """
+    # Define the names of the SMA columns based on the window sizes
+    short_sma_col = f'SMA_{short_window}'
+    long_sma_col = f'SMA_{long_window}'
+    
+    # Ensure the required SMA columns exist in the data
+    if short_sma_col not in data.columns or long_sma_col not in data.columns:
+        raise ValueError(f"Data must contain '{short_sma_col}' and '{long_sma_col}' columns.")
+
+    # Initialize portfolio state
+    cash = initial_capital
+    shares_held = 0
+    position = 'neutral'  # Can be 'neutral' or 'long'
+    portfolio_history = []
+
+    # Loop through the data starting from the first day
+    for i in range(len(data)):
+        current_price = data['Adj Close'].iloc[i]
+        
+        # We need at least one previous day to check for a crossover
+        if i > 0:
+            # Get SMA values for the current and previous day
+            short_sma_current = data[short_sma_col].iloc[i]
+            long_sma_current = data[long_sma_col].iloc[i]
+            short_sma_previous = data[short_sma_col].iloc[i-1]
+            long_sma_previous = data[long_sma_col].iloc[i-1]
+
+            # --- Check for Trading Signals ---
+            # Golden Cross: Buy signal
+            if short_sma_current > long_sma_current and short_sma_previous < long_sma_previous and position == 'neutral':
+                # Calculate cost and number of shares to buy with all available cash
+                cost_per_share = current_price * (1 + transaction_cost_pct)
+                if cost_per_share > 0:
+                    shares_to_buy = cash // cost_per_share
+                    if shares_to_buy > 0:
+                        cash -= shares_to_buy * cost_per_share
+                        shares_held = shares_to_buy
+                        position = 'long' # Update position state
+
+            # Death Cross: Sell signal
+            elif short_sma_current < long_sma_current and short_sma_previous > long_sma_previous and position == 'long':
+                # Sell all held shares
+                sell_proceeds = (shares_held * current_price) * (1 - transaction_cost_pct)
+                cash += sell_proceeds
+                shares_held = 0
+                position = 'neutral' # Update position state
+
+        # Calculate portfolio value for the current day regardless of trading
+        current_portfolio_value = cash + (shares_held * current_price)
+        portfolio_history.append(current_portfolio_value)
+
+    # --- Final Value Calculation (Liquidation) ---
+    # To ensure a fair comparison, we liquidate any final holdings
+
+    last_day_price = data['Adj Close'].iloc[-1]
+    if shares_held > 0:
+        sell_proceeds = (shares_held * last_day_price) * (1 - transaction_cost_pct)
+        cash += sell_proceeds
+    
+    final_portfolio_value = cash
+    
+    # Create the pandas Series for the portfolio history
+    portfolio_history_series = pd.Series(portfolio_history, index=data.index)
+    
+    return final_portfolio_value, portfolio_history_series
+# highlight-end

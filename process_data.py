@@ -2,6 +2,15 @@
 import pandas as pd
 import os
 
+# Define a path for the processed data
+PROCESSED_DATA_PATH = 'processed_data'
+
+# Create the directory if it doesn't exist
+if not os.path.exists(PROCESSED_DATA_PATH):
+    os.makedirs(PROCESSED_DATA_PATH)
+    print(f"Created directory: {PROCESSED_DATA_PATH}")
+
+
 # --- 1. Define Constants and Load Data ---
 
 # Define the path to the data directory, consistent with our download script
@@ -444,5 +453,29 @@ print("\n--- Final Inspection of Normalized Data ---")
 print(test_data['AAPL'][COLUMNS_TO_NORMALIZE].describe())
 # highlight-end
 
+# --- 13. Save Processed Data to CSV ---
+# We save the three split and normalized datasets separately.
 
+print("\n--- Saving Processed and Normalized Data to CSV Files ---")
+
+# Ensure the processed data directory exists
+os.makedirs(PROCESSED_DATA_PATH, exist_ok=True)
+
+for ticker in TICKERS:
+    # Save the training data
+    train_path = os.path.join(PROCESSED_DATA_PATH, f"{ticker}_train.csv")
+    train_data[ticker].to_csv(train_path, index=True)
+    print(f" - Saved training data for {ticker} to {train_path}")
+    
+    # Save the validation data
+    val_path = os.path.join(PROCESSED_DATA_PATH, f"{ticker}_validation.csv")
+    validation_data[ticker].to_csv(val_path, index=True)
+    print(f" - Saved validation data for {ticker} to {val_path}")
+    
+    # Save the test data
+    test_path = os.path.join(PROCESSED_DATA_PATH, f"{ticker}_test.csv")
+    test_data[ticker].to_csv(test_path, index=True)
+    print(f" - Saved test data for {ticker} to {test_path}")
+
+print("\nAll processed and split data has been saved.")
 

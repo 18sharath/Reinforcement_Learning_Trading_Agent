@@ -15,7 +15,7 @@ class TradingEnv(gym.Env):
     # Optional: metadata for rendering, can be useful for visualization
     metadata = {'render_modes': ['human'], 'render_fps': 1}
 
-   
+
 
 # highlight-start
     def __init__(self, df, lookback_window=10, initial_capital=100000, transaction_cost_pct=0.001,sharpe_reward_eta=0.1):
@@ -114,7 +114,7 @@ class TradingEnv(gym.Env):
         # It ends at the current_step (inclusive), so we take step - window + 1 to step.
         start_idx = self.current_step - self.lookback_window + 1
         end_idx = self.current_step + 1
-        market_features = self.df.iloc[start_idx:end_idx].values
+        market_features = self.df.iloc[start_idx:end_idx].values.astype(np.float32)
         
          # highlight-start
         # Here we construct the portfolio status vector.
@@ -220,8 +220,10 @@ class TradingEnv(gym.Env):
 # # highlight-end
 
 # highlight-start
-        # --- 3. Calculate Reward (Differential Sharpe Ratio) ---
-        # Calculate the daily return percentage. Add a small epsilon for numerical stability.
+#         # --- 3. Calculate Reward (Differential Sharpe Ratio) ---
+        
+
+#         # Calculate the daily return percentage. Add a small epsilon for numerical stability.
         daily_return = (self.portfolio_value / (previous_portfolio_value + 1e-9)) - 1
         
         # Store previous values of A and B for the DSR calculation
@@ -239,7 +241,9 @@ class TradingEnv(gym.Env):
             reward = (prev_B * daily_return - prev_A * (daily_return**2)) / denominator
         else:
             reward = 0.0 # Assign a neutral reward if the calculation is unstable
-# highlight-end
+# # highlight-end
+        
+        #  reward = self.portfolio_value - previous_portfolio_value  #here i canged 
 
 
         # Store action and reward for rendering
@@ -262,7 +266,8 @@ class TradingEnv(gym.Env):
             observation = self._get_observation()
 
         info = {'portfolio_value': self.portfolio_value}
-        
+       
+        print(f"Reward: {reward}")
         return observation, reward, terminated, False, info
 # highlight-end
     def render(self):
