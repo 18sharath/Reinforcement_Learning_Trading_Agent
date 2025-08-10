@@ -64,5 +64,7 @@ def calculate_performance_metrics(portfolio_history):
         'Final Portfolio Value': portfolio_history.iloc[-1]
     }
     
+    
+    
     return metrics
 

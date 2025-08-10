@@ -60,12 +60,15 @@ class TradingEnv(gym.Env):
         self.current_step = 0
         self.cash = 0
         self.shares_held = 0
-        self.portfolio_value = 0
+        self.portfolio_value = 0 
         
 # # highlight-start
 #         # Add attributes to track portfolio returns for volatility calculation
 #         self.portfolio_return_history = []
 # # highlight-end
+
+
+
 #highlight-start
         # Add attributes for the Differential Sharpe Ratio calculation
         self.A = 0.0  # EWMA of returns
@@ -174,90 +177,53 @@ class TradingEnv(gym.Env):
         Executes one time step within the environment based on the agent's action.
         """
         previous_portfolio_value = self.portfolio_value
-        
-        # We use the 'Adj Close' of the CURRENT day for transaction price.
-        # The current day is the last day in our lookback window.
+
+        # Get current price safely
         current_price = self.df.loc[self.df.index[self.current_step], 'Adj Close']
-        
-        if action == 0: # Buy
-            cost_of_buy = current_price * (1 + self.transaction_cost_pct)
-            if self.cash >= cost_of_buy:
-                self.shares_held += 1
-                self.cash -= cost_of_buy
-        elif action == 1: # Sell
+        if not np.isfinite(current_price) or current_price <= 0:
+            current_price = previous_portfolio_value / max(self.shares_held, 1)  # fallback
+
+        # === Action logic ===
+        if action == 0:  # Buy
+            cost_per_share = current_price * (1 + self.transaction_cost_pct)
+            shares_to_buy = int(self.cash / max(cost_per_share, 1e-9))
+            if shares_to_buy > 0:
+                self.shares_held += shares_to_buy
+                self.cash -= shares_to_buy * cost_per_share
+
+        elif action == 1:  # Sell
             if self.shares_held > 0:
-                proceeds_from_sell = (self.shares_held * current_price) * (1 - self.transaction_cost_pct)
-                self.cash += proceeds_from_sell
+                proceeds = self.shares_held * current_price * (1 - self.transaction_cost_pct)
+                self.cash += proceeds
                 self.shares_held = 0
-            
-                # --- Update Portfolio Value ---
-    # highlight-start
-        # 2. After the action, recalculate the portfolio's new value based on the
-        # current market price. This new value reflects the outcome of our action.
+
+        # Update portfolio value
         self.portfolio_value = self.cash + (self.shares_held * current_price)
-    # highlight-end
-# highlight-start
-#         # --- 3. Calculate Reward (Refined with Risk Penalty) ---
-#         # Calculate the raw profit-and-loss (P&L) for this step
-#         pnl = self.portfolio_value - previous_portfolio_value
 
-#         # Calculate the daily return percentage to track volatility
-#         # We add a small epsilon to the denominator to avoid division by zero
-#         daily_return = (self.portfolio_value / (previous_portfolio_value + 1e-9)) - 1
-#         self.portfolio_return_history.append(daily_return)
-
-#         # Calculate the volatility penalty
-#         # We only start penalizing after we have a few data points
-#         if len(self.portfolio_return_history) > 1:
-#             # Standard deviation of returns is a common measure of volatility (risk)
-#             volatility = np.std(self.portfolio_return_history)
-#             volatility_penalty = volatility * self.risk_aversion_multiplier
-#         else:
-#             volatility_penalty = 0
-
-#         # The final reward is the P&L minus the risk penalty
-#         reward = pnl - volatility_penalty
-# # highlight-end
-
-# highlight-start
-#         # --- 3. Calculate Reward (Differential Sharpe Ratio) ---
-        
-
-#         # Calculate the daily return percentage. Add a small epsilon for numerical stability.
+        # === Reward calculation ===
         daily_return = (self.portfolio_value / (previous_portfolio_value + 1e-9)) - 1
-        
-        # Store previous values of A and B for the DSR calculation
-        prev_A = self.A
-        prev_B = self.B
-        
-        # Update the EWMA of returns (A) and squared returns (B)
+
+        prev_A, prev_B = self.A, self.B
         self.A = (1 - self.sharpe_reward_eta) * self.A + self.sharpe_reward_eta * daily_return
         self.B = (1 - self.sharpe_reward_eta) * self.B + self.sharpe_reward_eta * (daily_return ** 2)
-        
-        # Calculate the DSR. Check for the edge case where the denominator is zero.
-        # This can happen at the beginning of the episode.
+
         denominator = (prev_B - prev_A**2)**(3/2)
         if denominator > 1e-9:
             reward = (prev_B * daily_return - prev_A * (daily_return**2)) / denominator
         else:
-            reward = 0.0 # Assign a neutral reward if the calculation is unstable
-# # highlight-end
-        
-        #  reward = self.portfolio_value - previous_portfolio_value  #here i canged 
+            reward = 0.0
 
+        # === Clip reward to avoid huge spikes ===
+        reward = float(np.clip(reward, -1, 1))  # you can adjust range
 
-        # Store action and reward for rendering
         self._last_action = action
         self._last_reward = reward
-        
+
+        # Step forward
         self.current_step += 1
-        
-        # Check for termination: if we've reached the end of the data
         terminated = self.current_step >= self.n_steps - 1
-        
-        # Get next observation
+
         if terminated:
-            # If terminated, return a zeroed-out observation that matches the space structure
             observation = {
                 'market_data': np.zeros((self.lookback_window, self.n_features), dtype=np.float32),
                 'portfolio_status': np.zeros(3, dtype=np.float32)
@@ -266,10 +232,9 @@ class TradingEnv(gym.Env):
             observation = self._get_observation()
 
         info = {'portfolio_value': self.portfolio_value}
-       
-        print(f"Reward: {reward}")
+
         return observation, reward, terminated, False, info
-# highlight-end
+
     def render(self):
         """
         Renders the environment's current state for human consumption.

@@ -81,6 +81,7 @@ def main():
     # This is a crucial sanity check to ensure our custom environment
     # correctly follows the Gymnasium API that stable-baselines3 expects.
     # It will raise an error if any inconsistencies are found.
+
     print("Step 3a: Checking the environment's compatibility...")
     try:
         check_env(env)
@@ -102,6 +103,8 @@ def main():
     #      directly connected to this specific instance of the environment.
     # verbose=1: This will print out training progress information (like mean reward)
     #            to the console, which is very useful for monitoring.
+
+
     print("Step 4: Instantiating the PPO model...")
      # We add the `tensorboard_log` parameter, pointing it to our newly defined directory.
     # Now, during training, SB3 will automatically write logs to this location.
@@ -119,7 +122,7 @@ def main():
     # --- 6. Save the Trained Model ---
     # After training, we save the agent's learned policy for later evaluation.
     print("Step 6: Saving the trained model...")
-    # model.save(os.path.join(MODEL_SAVE_DIR, 'ppo_trading_agent'))
+    
     
     print("\\nTraining complete and model saved!")
 
