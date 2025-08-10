@@ -1,0 +1,4 @@
+,Cumulative Return,Annualized Return (CAGR),Annualized Volatility,Sharpe Ratio,Sortino Ratio,Maximum Drawdown
+RL Agent,9.00%,5.40%,31.41%,0.11,0.16,-35.59%
+Buy and Hold,5.27%,3.18%,31.82%,0.04,0.05,-36.01%
+SMA Crossover,-3.19%,-1.96%,13.73%,-0.29,-0.40,-23.24%

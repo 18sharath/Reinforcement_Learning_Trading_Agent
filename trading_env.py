@@ -54,6 +54,8 @@ class TradingEnv(gym.Env):
         # The number of features from our dataframe that the agent will observe.
         self.n_features = len(self.df.columns)
         
+        self.history = []
+
         # --- 3. Initialize the state of the environment ---\
         # The `current_step` will now need to start after the initial lookback period.
         # We declare these attributes here, but they will be properly initialized in reset()
@@ -130,7 +132,7 @@ class TradingEnv(gym.Env):
         ], dtype=np.float32)
         # highlight-end
 
-
+        
         # Return the observation as a dictionary
         return {
             'market_data': market_features,
@@ -163,7 +165,7 @@ class TradingEnv(gym.Env):
         # Reset render-specific info
         self._last_action = 2 # Reset to 'Hold'
         self._last_reward = 0.0
-        
+        self.history = []
         # Get the very first observation.
         observation = self._get_observation()
         
@@ -183,19 +185,26 @@ class TradingEnv(gym.Env):
         if not np.isfinite(current_price) or current_price <= 0:
             current_price = previous_portfolio_value / max(self.shares_held, 1)  # fallback
 
+        trade_type = 'Hold'
+        trade_shares = 0
         # === Action logic ===
         if action == 0:  # Buy
+            trade_type = 'Buy'
             cost_per_share = current_price * (1 + self.transaction_cost_pct)
             shares_to_buy = int(self.cash / max(cost_per_share, 1e-9))
             if shares_to_buy > 0:
                 self.shares_held += shares_to_buy
                 self.cash -= shares_to_buy * cost_per_share
+                trade_shares = shares_to_buy
 
         elif action == 1:  # Sell
+            trade_type = 'Sell'
             if self.shares_held > 0:
+                trade_shares=self.shares_held
                 proceeds = self.shares_held * current_price * (1 - self.transaction_cost_pct)
                 self.cash += proceeds
                 self.shares_held = 0
+                
 
         # Update portfolio value
         self.portfolio_value = self.cash + (self.shares_held * current_price)
@@ -219,6 +228,15 @@ class TradingEnv(gym.Env):
         self._last_action = action
         self._last_reward = reward
 
+        self.history.append({
+            'date': self.df.index[self.current_step],
+            'portfolio_value': self.portfolio_value,
+            'cash': self.cash,
+            'shares_held': self.shares_held,
+            'trade_type': trade_type,
+            'trade_shares': trade_shares,
+            'trade_price': current_price
+        })
         # Step forward
         self.current_step += 1
         terminated = self.current_step >= self.n_steps - 1
@@ -232,6 +250,8 @@ class TradingEnv(gym.Env):
             observation = self._get_observation()
 
         info = {'portfolio_value': self.portfolio_value}
+
+       
 
         return observation, reward, terminated, False, info
 

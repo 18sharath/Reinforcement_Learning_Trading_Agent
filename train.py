@@ -49,11 +49,11 @@ def main():
 
     # --- Perform a chronological split (70% train, 15% validation, 15% test) ---
     # This is crucial to prevent lookahead bias.
-    train_size = int(len(df) * 0.7)
-    val_size = int(len(df) * 0.15)
+    # train_size = int(len(df) * 0.7)
+    # val_size = int(len(df) * 0.15)  since have separete csv file no need to devide saperatily
     
     # The training data is the first 70% of the dataset
-    train_df = df.iloc[:train_size]
+    train_df = df
     
     # The validation and test sets can be defined for later use, but are not used for training.
     # val_df = df.iloc[train_size : train_size + val_size]
@@ -119,12 +119,17 @@ def main():
     print(f"Step 5: Training the model for {TRAINING_TIMESTEPS} timesteps...")
     model.learn(total_timesteps=TRAINING_TIMESTEPS)
 
+# highlight-start
     # --- 6. Save the Trained Model ---
     # After training, we save the agent's learned policy for later evaluation.
-    print("Step 6: Saving the trained model...")
+    # The .save() method bundles the policy architecture, learned weights, and
+    # normalization stats into a single .zip file.
+    model_save_path = os.path.join(MODEL_SAVE_DIR, 'ppo_trading_agent.zip')
+    print(f"Step 6: Saving the trained model to: {model_save_path}")
+    model.save(model_save_path)
     
-    
-    print("\\nTraining complete and model saved!")
+    print("\nTraining complete and model saved!")
+# highlight-end
 
 if __name__ == '__main__':
     # This block ensures that the main() function is called only when
